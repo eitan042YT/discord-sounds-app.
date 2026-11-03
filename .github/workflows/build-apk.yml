@@ -15,16 +15,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract project
-        run: |
-          unzip WhatsAppDiscordSoundsApp_Source.zip -d extracted
-          cd extracted/WhatsAppDiscordSoundsApp
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Extract project
+        run: unzip WhatsAppDiscordSoundsApp_Source.zip -d extracted
+
+      - name: Fix JVM targets
+        run: |
+          python3 - <<'PY'
+          p = 'extracted/WhatsAppDiscordSoundsApp/app/build.gradle'
+          s = open(p).read()
+          s = s.replace('android {', """android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }""", 1)
+          open(p, 'w').write(s)
+          PY
 
       - name: Build APK
         run: |
