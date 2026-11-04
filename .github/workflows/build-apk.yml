@@ -1,57 +1,70 @@
 name: Build APK
 
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '*.zip'
-      - '.github/workflows/build-apk.yml'
+workflow_dispatch:
+push:
+paths:
+- '*.zip'
+- '.github/workflows/build-apk.yml'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Set up Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
+  - name: Set up Gradle
+    uses: gradle/actions/setup-gradle@v4
+    with:
+      gradle-version: '8.7'
 
-      - name: Extract project
-        run: unzip WhatsAppDiscordSoundsApp_Source.zip -d extracted
+  - name: Check ZIP file
+    run: |
+      ls -lah
+      test -f DiscordSounds.zip.zip
 
-      - name: Fix JVM targets
-        run: |
-          python3 - <<'PY'
-          p = 'extracted/WhatsAppDiscordSoundsApp/app/build.gradle'
-          s = open(p).read()
+  - name: Extract project
+    run: unzip DiscordSounds.zip.zip -d extracted
+
+  - name: Find project folder
+    run: |
+      find extracted -name build.gradle -type f
+      test -f extracted/WhatsAppDiscordSoundsApp/app/build.gradle
+
+  - name: Fix JVM targets
+    run: |
+      python3 - <<'PY'
+      p = 'extracted/WhatsAppDiscordSoundsApp/app/build.gradle'
+      s = open(p).read()
+
+      if 'compileOptions {' not in s:
           s = s.replace('android {', """android {
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }""", 1)
-          open(p, 'w').write(s)
-          PY
+          compileOptions {
+              sourceCompatibility JavaVersion.VERSION_17
+              targetCompatibility JavaVersion.VERSION_17
+          }
+          kotlinOptions {
+              jvmTarget = '17'
+          }""", 1)
 
-      - name: Build APK
-        run: |
-          cd extracted/WhatsAppDiscordSoundsApp
-          gradle --no-daemon assembleDebug
+      open(p, 'w').write(s)
+      PY
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Discord-Sounds-APK
-          path: extracted/WhatsAppDiscordSoundsApp/app/build/outputs/apk/debug/app-debug.apk
+  - name: Build APK
+    run: |
+      cd extracted/WhatsAppDiscordSoundsApp
+      gradle --no-daemon assembleDebug
+
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: Discord-Sounds-APK
+      path: extracted/WhatsAppDiscordSoundsApp/app/build/outputs/apk/debug/app-debug.apk
