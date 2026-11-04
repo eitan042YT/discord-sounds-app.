@@ -1,70 +1,62 @@
-name: Build APK
+name: Build Android APK
 
 on:
-workflow_dispatch:
-push:
-paths:
-- '*.zip'
-- '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/build-apk.yml'
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Set up Java
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: '17'
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-  - name: Set up Gradle
-    uses: gradle/actions/setup-gradle@v4
-    with:
-      gradle-version: '8.7'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
 
-  - name: Check ZIP file
-    run: |
-      ls -lah
-      test -f DiscordSounds.zip.zip
+      - name: Find and extract ZIP
+        run: |
+          set -e
+          ZIP_FILE="$(find . -maxdepth 1 -iname '*.zip' -type f | head -n 1)"
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP file found!"
+            exit 1
+          fi
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
 
-  - name: Extract project
-    run: unzip DiscordSounds.zip.zip -d extracted
+      - name: Find Android project
+        id: project
+        run: |
+          set -e
+          APP_GRADLE="$(find extracted -type f -path '*/app/build.gradle' | head -n 1)"
+          if [ -z "$APP_GRADLE" ]; then
+            echo "app/build.gradle not found!"
+            exit 1
+          fi
+          PROJECT_DIR="$(dirname "$(dirname "$APP_GRADLE")")"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-  - name: Find project folder
-    run: |
-      find extracted -name build.gradle -type f
-      test -f extracted/WhatsAppDiscordSoundsApp/app/build.gradle
+      - name: Build APK
+        run: |
+          cd "${{ steps.project.outputs.dir }}"
+          gradle --no-daemon assembleDebug
 
-  - name: Fix JVM targets
-    run: |
-      python3 - <<'PY'
-      p = 'extracted/WhatsAppDiscordSoundsApp/app/build.gradle'
-      s = open(p).read()
-
-      if 'compileOptions {' not in s:
-          s = s.replace('android {', """android {
-          compileOptions {
-              sourceCompatibility JavaVersion.VERSION_17
-              targetCompatibility JavaVersion.VERSION_17
-          }
-          kotlinOptions {
-              jvmTarget = '17'
-          }""", 1)
-
-      open(p, 'w').write(s)
-      PY
-
-  - name: Build APK
-    run: |
-      cd extracted/WhatsAppDiscordSoundsApp
-      gradle --no-daemon assembleDebug
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: Discord-Sounds-APK
-      path: extracted/WhatsAppDiscordSoundsApp/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Discord-Sounds-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
